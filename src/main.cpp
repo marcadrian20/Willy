@@ -19,7 +19,7 @@ int tibia = 280;
 int invertcoxa = 280;
 int invertfemur = 280;
 int inverttibia = 280;
-double stepLength = 50;
+double stepLength = 100;
 double stepHeight = 20;
 double stepDuration = 1.0;
 // SpiderLeg spiderleg("LEG1", 43, 60, 104);
@@ -156,11 +156,13 @@ std::vector<double> Hexapod::calculateTrajectory(int legIndex, double phase, dou
   double x;
   if (phase <= 0.5)
   {                                              // Forward swing
-    x = defaultX + (2 * phase - 1) * stepLength; // Forward motion during the swing
+    x = defaultX + sin(M_PI * phase) * stepLength; // Forward motion during the swing
+    std::cout<<"Forward placement"<<x<< std::endl;
   }
   else
   {                                                          // Backward placement
-    x = defaultX - (2 * (phase - 0.5) - 1) * stepLength / 2; // Backward motion during placement
+    x = defaultX ;//- (2 * (phase - 0.5) - 1) * stepLength/2; // Backward motion during placement
+    std::cout<<"Backward placement"<<x<< std::endl;
   }
   // ##TODO: FIX everything. It has the traditional shape of the curve but
   // calculations are wrong. Either fix sinusoidal curves or use bezier curves
@@ -172,10 +174,11 @@ std::vector<double> Hexapod::calculateTrajectory(int legIndex, double phase, dou
   // // Vertical motion (lift/lower)
   // double z = defaultZ + ((phase > 0.5) ? 0 : stepHeight); // stepHeight * sin(M_PI * phase * 2)         // Lift
   //: stepHeight * sin(M_PI * (1 - phase) * 2)); // Lower
-  double z = defaultZ + ((phase > 0.5) ? 0 : stepHeight * sin(M_PI * phase * 2));
+  // double z = defaultZ + ((phase > 0.5) ? 0 : stepHeight * sin(M_PI * phase * 2));
   // ////////////!!!!!!!!!!!!!!!!!
-  // double z = defaultZ + ((phase > 0.5) ?stepHeight * sin(M_PI * phase * 2)         // Lift
-  //   : stepHeight * sin(M_PI * (1 - phase) * 2)); // Lower
+  double z = defaultZ + ((phase > 0.5) ?stepHeight * sin(M_PI * phase * 2)         // Lift
+    : stepHeight * sin(M_PI * (1 - phase) * 2)); // Lower
+  std::cout<<"Z placement"<<z<< std::endl;
   // walks better but doesnt raise foot
   // ///////////!!!!!!!!!!!!!!!!!!
   // // Lateral motion (fixed for crawling)
@@ -192,6 +195,7 @@ void setServoAngles(int legIndex, const std::vector<double> &angles)
   // Map joint angles to servo pulses
   if (legIndex == 4 || legIndex == 5)
     return;
+  std::cout<<angles[0]<<" "<<angles[1]<<" "<<angles[2]<<std::endl;
   auto coxaAng = max(-180.0, min(angles[0] + 8, 180.0));
   auto femurAng = max(-180.0, min(angles[1] - 35, 180.0));
   auto tibiaAng = max(-180.0, min(angles[2] - 83, 180.0));
@@ -223,9 +227,9 @@ void Hexapod::setBodyPosition(double x, double y, double z)
   {
     auto joints = quadruped.legs[i].forwardKinematics();
     // Calculate the default resting position for the leg
-    double defaultX = 0; //(i % 2 == 0) ? -L1_TO_R1 / 2 : L1_TO_R1 / 2; // Left legs negative, right legs positive
-    double defaultY = 0; //(i < 3) ? L1_TO_L3 / 2 : -L1_TO_L3 / 2;      // Front legs positive, back legs negative
-    double defaultZ = LEG_SITTING_Z;
+    double defaultX = joints[4][0]; //(i % 2 == 0) ? -L1_TO_R1 / 2 : L1_TO_R1 / 2; // Left legs negative, right legs positive
+    double defaultY = joints[4][1];; //(i < 3) ? L1_TO_L3 / 2 : -L1_TO_L3 / 2;      // Front legs positive, back legs negative
+    double defaultZ = joints[4][2];;
 
     // Adjust the leg's position based on the body's new position
     std::vector<double> targetPosition = {
@@ -247,8 +251,8 @@ void Hexapod::setBodyPosition(double x, double y, double z)
         Serial.print(" ");
       }
       Serial.println();
-      setServoAngles(i, angles);
-      delay(50);
+      // setServoAngles(i, angles);
+      // delay(50);
     }
   }
 }
@@ -272,7 +276,7 @@ void Hexapod::walkCrawl(double stepLength, double stepHeight, double stepDuratio
 
     // Shift the body slightly to balance the motion
 
-    setBodyPosition(bodyX + stepLength / 4, bodyY, bodyZ);
+    // setBodyPosition(bodyX + stepLength / 4, bodyY, bodyZ);
     // #TODO make set body pos work and fix gait generation
   }
 }
