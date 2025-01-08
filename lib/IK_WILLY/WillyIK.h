@@ -186,28 +186,6 @@ public:
     }
     void initializeStance();
     // Perform a walking gait
-    void walk(double stepLength, double stepHeight)
-    {
-        // Example: tripod gait (three legs move at a time)
-        int group1[] = {0, 3, 5}; // Legs 1, 4, 6
-        int group2[] = {1, 2, 4}; // Legs 2, 3, 5
-
-        // Step 1: Move group 1 forward
-        for (int i : group1)
-        {
-            moveLeg(i, {bodyX + stepLength, bodyY, bodyZ + stepHeight});
-        }
-        // Simulate body shift (all legs support the weight here)
-        setBodyPosition(bodyX + stepLength / 2, bodyY, bodyZ);
-
-        // Step 2: Move group 2 forward
-        for (int i : group2)
-        {
-            moveLeg(i, {bodyX + stepLength, bodyY, bodyZ + stepHeight});
-        }
-        // Finalize step
-        setBodyPosition(bodyX + stepLength, bodyY, bodyZ);
-    }
 
     // Print the positions of all legs
     void printLegPositions()
@@ -218,7 +196,7 @@ public:
             legs[i].printJointPositions();
         }
     }
-    void walkQuadruped(double stepLength, double stepHeight, double stepDuration);
-    std::vector<double> calculateTrajectory(int legIndex, double phase, double stepLength, double stepHeight);
-    void walkCrawl(double stepLength, double stepHeight, double stepDuration); 
+    void walkQuadruped(double stepLength, double stepHeight, double stepDuration,int motionType);
+    std::vector<double> calculateTrajectory(int legIndex, double phase, double stepLength, double stepHeight,int motionType);
+    void walkCrawl(double stepLength, double stepHeight, double stepDuration,int motionType); 
 };
