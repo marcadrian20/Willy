@@ -196,7 +196,9 @@ public:
             legs[i].printJointPositions();
         }
     }
-    void walkQuadruped(double stepLength, double stepHeight, double stepDuration,int motionType);
-    std::vector<double> calculateTrajectory(int legIndex, double phase, double stepLength, double stepHeight,int motionType);
-    void walkCrawl(double stepLength, double stepHeight, double stepDuration,int motionType); 
+    void walkQuadruped(double stepLength, double stepHeight, double stepDuration,int motionType,int direction);
+    std::vector<double> calculateTrajectory(int legIndex, double phase, double stepLength, double stepHeight,int motionType,int direction);
+    std::vector<double> calculateWaveTrajectory(int legIndex, double phase, double stepLength, double stepHeight,int motionType,int direction);
+    void walkCrawl(double stepLength, double stepHeight, double stepDuration,int motionType,int direction);
+    void walkWaveGait(double stepLength, double stepHeight, double stepDuration,int motionType,int direction); 
 };
