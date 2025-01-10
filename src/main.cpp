@@ -15,8 +15,8 @@ void setup()
   Serial.begin(115200);
   Wire.begin();
   while(!Serial);
-  quadruped.initializeStance();
-  delay(2000);
+  // quadruped.initializeStance();
+  // delay(2000);
   quadruped.InitializeRobotControllers();
   delay(1000);
 }
@@ -55,6 +55,7 @@ void loop()
     // {
     //   quadruped.walkQuadruped(stepLength, stepHeight, stepDuration, WALK, 0);
     // }
+    // quadruped.balanceBody();
   }
   // quadruped.walkCrawl(stepLength, stepHeight, stepDuration);
   // quadruped.walkQuadruped(stepLength, stepHeight, stepDuration);

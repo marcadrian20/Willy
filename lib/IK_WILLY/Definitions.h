@@ -26,7 +26,7 @@ const double L2_TO_R2 = 163;
 #define MPU6500_ADDRESS 0x68
 
 #define WALK 0
-#define ROTATE 1
+#define ROTATE 2
 
 #define WALK_FORWARD 0
 #define WALK_BACKWARDS 1

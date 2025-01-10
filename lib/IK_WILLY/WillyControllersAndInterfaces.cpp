@@ -50,4 +50,31 @@ float MPU6500Interface::getRoll()
     return mpu6500.getRoll();
 }
 
+float PIDController::calculate(float input)
+{
+    unsigned long currentTime = millis();
+    float deltaTime = (currentTime - lastTime) / 1000.0; // convert to seconds
+    if (lastTime == 0)
+    {
+        deltaTime = 0;
+    }
+    lastTime = currentTime;
+    float error = setpoint - input;
+    integral += error * deltaTime;
+    float derivative = deltaTime > 0 ? (error - previousError) / deltaTime : 0;
+    float output = kp * error + ki * integral + kd * derivative;
+    previousError = error;
+    return output;
+}
+
+void PIDController::reset()
+{
+    previousError = 0;
+    integral = 0;
+}
+
+// void setTarget(float target)
+// {
+//     setpoint = target;
+// }
 

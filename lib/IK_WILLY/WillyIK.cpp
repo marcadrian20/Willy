@@ -88,7 +88,7 @@ void Hexapod::setBodyPosition(double x, double y, double z)
     for (int i = 0; i < legs.size(); ++i)
     {
         // Default position of the leg
-        double defaultX = 0; // L1_TO_R1 / 2;
+        double defaultX = L1_TO_R1/2; // L1_TO_R1 / 2;
         double defaultY = L1_TO_L3 / 2;
         double defaultZ = LEG_SITTING_Z;
         // Adjust the leg's position based on the body's new position
@@ -338,4 +338,11 @@ std::vector<double> SpiderLeg::inverseKinematics(const std::vector<double> &targ
 
     setAngles({theta1 * 180.0 / M_PI, theta2 * 180.0 / M_PI, theta3 * 180.0 / M_PI});
     return getAngles();
+}
+
+void Hexapod::balanceBody() {
+    float currentPitch = mpu6500.getPitch();
+    float currentRoll = mpu6500.getRoll();
+    
+    balanceController.balance(currentPitch, currentRoll);
 }

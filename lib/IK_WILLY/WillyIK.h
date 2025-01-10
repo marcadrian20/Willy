@@ -65,6 +65,7 @@ private:
     double orientation;         // Body's orientation in degrees
     ServoController servoController=ServoController(PCA9685_ADDRESS);
     MPU6500Interface mpu6500=MPU6500Interface(MPU6500_ADDRESS);
+    BalanceController balanceController=BalanceController(*this);
     
 public:
     // Constructor to initialize legs and body position
@@ -95,7 +96,7 @@ public:
             legs[i].printJointPositions();
         }
     }
-
+    void balanceBody();
     // Set the angles of the servos for a given leg
     void setLegServoAngles(int legIndex, const std::vector<double> &angles);
     void walkQuadruped(double stepLength, double stepHeight, double stepDuration, int motionType, int direction);
