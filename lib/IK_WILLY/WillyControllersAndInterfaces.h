@@ -44,7 +44,7 @@ public:
 
     float calculate(float input);
     void reset();
-    // void setTarget(float target);
+    void setTarget(float target);
 };
 
 class BalanceController

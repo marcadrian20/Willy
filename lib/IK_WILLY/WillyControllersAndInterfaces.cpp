@@ -60,6 +60,8 @@ float PIDController::calculate(float input)
     }
     lastTime = currentTime;
     float error = setpoint - input;
+    if (fabs(error) < 1.0)
+        return 0.0;
     integral += error * deltaTime;
     float derivative = deltaTime > 0 ? (error - previousError) / deltaTime : 0;
     float output = kp * error + ki * integral + kd * derivative;
@@ -73,8 +75,7 @@ void PIDController::reset()
     integral = 0;
 }
 
-// void setTarget(float target)
-// {
-//     setpoint = target;
-// }
-
+void PIDController::setTarget(float target)
+{
+    setpoint = target;
+}

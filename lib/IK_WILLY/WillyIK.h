@@ -69,6 +69,7 @@ private:
     
 public:
     // Constructor to initialize legs and body position
+    std::vector<std::vector<double>> currentLegTargets;
     Hexapod(double coxa, double femur, double tibia) : bodyX(0), bodyY(0), bodyZ(LEG_SITTING_Z), orientation(0)
     {
         // Initialize 6 legs with default names and dimensions
@@ -76,6 +77,7 @@ public:
         {
             legs.emplace_back("Leg" + std::to_string(i + 1), coxa, femur, tibia);
         }
+         currentLegTargets.resize(6, {L1_TO_R1/2, L1_TO_L3/2, LEG_SITTING_Z+10});
     }
     // Get references to all legs
     std::vector<SpiderLeg> &getLegs()

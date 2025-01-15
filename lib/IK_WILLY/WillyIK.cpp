@@ -4,7 +4,7 @@ std::vector<double> Hexapod::calculateTrajectory(int legIndex, double phase, dou
 { // Neutral positions for the leg
     double defaultX = L1_TO_R1 / 2;
     double defaultY = L1_TO_L3 / 2;
-    double defaultZ = LEG_SITTING_Z;
+    double defaultZ = LEG_SITTING_Z + 10;
     // Direction 0 is forward, 1 is backward, 2 is left, 3 is right
     //  X is Horizontal motion (forward/backward)
     //  Y is Lateral motion (side to side)
@@ -12,7 +12,7 @@ std::vector<double> Hexapod::calculateTrajectory(int legIndex, double phase, dou
     //  Motion type 0 is forward/backward, 1 is side to side,if motion type is 2, 0 is left, 1 is right
     double x = defaultX, y = defaultY;
     // x = 0;
-    std::cout << "Leg index" << legIndex << "Phase" << phase << std::endl;
+    std::cout << "Leg index" << legIndex << "Phase" << phase << std::endl; // 0.625
     double z = defaultZ + ((phase <= 0.25) ? stepHeight * sin(M_PI * (1 - phase) * 4) : (phase > 0.70) ? (stepHeight / 2) * sin(M_PI * phase * 4)
                                                                                                        : -(stepHeight / 2) * cos(M_PI * phase * 1.35 + 0.465));
     switch (motionType)
@@ -88,7 +88,7 @@ void Hexapod::setBodyPosition(double x, double y, double z)
     for (int i = 0; i < legs.size(); ++i)
     {
         // Default position of the leg
-        double defaultX = L1_TO_R1/2; // L1_TO_R1 / 2;
+        double defaultX = L1_TO_R1 / 2; // L1_TO_R1 / 2;
         double defaultY = L1_TO_L3 / 2;
         double defaultZ = LEG_SITTING_Z;
         // Adjust the leg's position based on the body's new position
@@ -181,9 +181,9 @@ void Hexapod::walkWaveGait(double stepLength, double stepHeight, double stepDura
 {
     // Phase offsets for each leg (0.25 phase difference)
     double legPhases[4] = {0.0, 0.25, 0.5, 0.75};
-
+    static int balanceCounter = 0;
     // Single gait cycle
-    for (double t = 0; t <= 1.0; t += 0.05)
+    for (double t = 0; t <= 1.0; t += 0.1)
     {
         // Move all legs according to their phases
         for (int i = 0; i < 4; i++)
@@ -193,9 +193,18 @@ void Hexapod::walkWaveGait(double stepLength, double stepHeight, double stepDura
                 legPhase -= 1.0;
 
             auto target = calculateTrajectory(i, legPhase, stepLength, stepHeight, motionType, direction);
+            // currentLegTargets[i] = target; // Store the current target for each leg
             auto angles = legs[i].inverseKinematics(target);
             setLegServoAngles(i, angles);
+            // balanceBody();
         }
+        // if (balanceCounter % 5 == 0)
+        // {
+        //     // delay(50);
+        //     balanceBody();
+        // }
+        // balanceCounter++;
+        // balanceBody();
         delay(stepDuration * 50); // Adjust timing as needed
     }
 }
@@ -204,12 +213,12 @@ void Hexapod::initializeStance()
 {
     // Define neutral positions for each leg
     std::vector<std::vector<double>> neutralPositions = {
-        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z}, // Front Left (L1)
-        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z}, // Front Right (R1)
-        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z}, // Rear Left (L3)
-        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z}, // Rear Right (R3)
-        {-L1_TO_R1 / 2, 0, LEG_SITTING_Z},           // Middle Left (L2)
-        {L1_TO_R1 / 2, 0, LEG_SITTING_Z}             // Middle Right (R2)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z + 10}, // Front Left (L1)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z + 10}, // Front Right (R1)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z + 10}, // Rear Left (L3)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z + 10}, // Rear Right (R3)
+        {-L1_TO_R1 / 2, 0, LEG_SITTING_Z},                // Middle Left (L2)
+        {L1_TO_R1 / 2, 0, LEG_SITTING_Z}                  // Middle Right (R2)
     };
 
     // Apply IK to move each leg to its neutral position
@@ -340,9 +349,13 @@ std::vector<double> SpiderLeg::inverseKinematics(const std::vector<double> &targ
     return getAngles();
 }
 
-void Hexapod::balanceBody() {
+void Hexapod::balanceBody()
+{
     float currentPitch = mpu6500.getPitch();
     float currentRoll = mpu6500.getRoll();
-    
+    std::cout << "Current pitch: " << currentPitch << std::endl;
+    std::cout << "Current roll: " << currentRoll << std::endl;
+    std::cout << "Balancing body..." << std::endl;
+    // std::cout<<"before modify:"<<currentLegTargets[i][2]<<std::endl;
     balanceController.balance(currentPitch, currentRoll);
 }

@@ -14,6 +14,7 @@ void setup()
   // quadruped.setBodyPosition(0, 0, -40);
   Serial.begin(115200);
   Wire.begin();
+  Wire.setClock(400000);
   while(!Serial);
   // quadruped.initializeStance();
   // delay(2000);
@@ -32,8 +33,8 @@ void loop()
   //   float z = data.substring(data.lastIndexOf(',') + 1).toFloat();
   //   Serial.println("X: " + String(x) + " Y: " + String(y) + " Z: " + String(z));
   // }
-  if (Serial.available()) // if reads 'w' then walk, 'r' rotate
-  {
+  // if (Serial.available()) // if reads 'w' then walk, 'r' rotate
+  // {
     char command = Serial.read();
     if (command == 'w')
     {
@@ -51,21 +52,24 @@ void loop()
     {
       quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, ROTATE, ROTATE_RIGHT);
     }
-    // else if (command == 'q')
-    // {
-    //   quadruped.walkQuadruped(stepLength, stepHeight, stepDuration, WALK, 0);
-    // }
-    // quadruped.balanceBody();
-  }
+    else if (command == 'q')
+    {
+      // quadruped.walkQuadruped(stepLength, stepHeight, stepDuration, WALK, 0);
+      quadruped.initializeStance();
+    }
+    quadruped.balanceBody();
+    delay(100);
+    //TODO add balance function inside the walk function
+  
   // quadruped.walkCrawl(stepLength, stepHeight, stepDuration);
   // quadruped.walkQuadruped(stepLength, stepHeight, stepDuration);
   // SpiderLeg spiderleg("1", 43, 60, 104);
-  // // std::cout<<"extend legs"<<std::endl;
-  // auto angles = spiderleg.inverseKinematics({0, (L1_TO_L3 / 2), LEG_SITTING_Z+10});
-  // setServoAngles(0, angles);
-  // setServoAngles(1, angles);
-  // setServoAngles(2, angles);
-  // setServoAngles(3, angles);
+  // // // std::cout<<"extend legs"<<std::endl;
+  // auto angles = spiderleg.inverseKinematics({16, 22, LEG_SITTING_Z-30});
+  // quadruped.setLegServoAngles(0, angles);
+  // quadruped.setLegServoAngles(1, angles);
+  // quadruped.setLegServoAngles(2, angles);
+  // quadruped.setLegServoAngles(3, angles);
   // delay(1000);
 
   // std::cout<<"sit legs"<<std::endl;
@@ -114,6 +118,7 @@ void adjustPosture()
   //if roll is positive, move the body to the left
   //if roll is negative, move the body to the right
   //#TODO convert delay to milis
+  
   
   // delay(1000);
 }
