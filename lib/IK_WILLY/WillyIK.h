@@ -86,7 +86,7 @@ public:
     }
     // Set the body position
     void setBodyPosition(double x, double y, double z);
-    void initializeStance();
+    void initializeStance();// Initialize the robot's stance ,also the standing position/action
     // Perform a walking gait
     void InitializeRobotControllers();
     // Print the positions of all legs
@@ -98,6 +98,22 @@ public:
             legs[i].printJointPositions();
         }
     }
+    float getRoll()
+    {
+        return mpu6500.getRoll();
+    }
+    float getPitch()
+    {
+        return mpu6500.getPitch();
+    }
+    float getTemp()
+    {
+        return mpu6500.getTemp();
+    }
+    void SetPidTargets(float pitch, float roll)
+    {
+        balanceController.setTarget(pitch, roll);
+    }
     void balanceBody();
     // Set the angles of the servos for a given leg
     void setLegServoAngles(int legIndex, const std::vector<double> &angles);
@@ -106,4 +122,5 @@ public:
     std::vector<double> calculateWaveTrajectory(int legIndex, double phase, double stepLength, double stepHeight, int motionType, int direction);
     void walkCrawl(double stepLength, double stepHeight, double stepDuration, int motionType, int direction);
     void walkWaveGait(double stepLength, double stepHeight, double stepDuration, int motionType, int direction);
+    void sittingAction();
 };

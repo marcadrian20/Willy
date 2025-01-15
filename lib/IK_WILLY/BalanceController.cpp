@@ -75,3 +75,8 @@ void BalanceController::reset()
     pitchPID.reset();
     rollPID.reset();
 }
+void BalanceController::setTarget(float pitch, float roll)
+{
+    pitchPID.setTarget(pitch);
+    rollPID.setTarget(roll);
+}

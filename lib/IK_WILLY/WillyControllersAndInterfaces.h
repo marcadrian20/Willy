@@ -27,6 +27,7 @@ public:
     bool init();
     float getPitch();
     float getRoll();
+    float getTemp();
 };
 
 class PIDController
@@ -58,4 +59,5 @@ public:
     BalanceController(Hexapod &hexapod);
     void balance(float pitch, float roll);
     void reset();
+    void setTarget(float pitch, float roll);
 };

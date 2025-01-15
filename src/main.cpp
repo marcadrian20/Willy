@@ -1,125 +1,504 @@
 #include "WillyIK.h"
+#include <WiFi.h>
+#include <esp_now.h>
+#include <WebServer.h>
 
-
+// Hexapod setup
 Hexapod quadruped(43, 60, 104);
 
-
+// Movement parameters
 double stepLength = 50;
 double stepHeight = 20;
 double stepDuration = 1.0;
-// SpiderLeg spiderleg("LEG1", 43, 60, 104);
-// std::vector<std::vector<int>> ServoMap = {{9, 10, 11}, {0, 1, 2}, {12, 12, 14}, {15, 16, 17}, {6, 7, 8}, {3, 4, 5}};
+
+// Structures for data
+struct XboxData
+{
+  bool button_a;
+  bool button_b;
+  bool button_y;
+  bool button_x;
+};
+
+XboxData xboxData;
+volatile bool isMoving = false;
+
+// Web server setup
+WebServer server(80);
+
+// Peer setup for ESP-NOW
+uint8_t peerAddress[] = {0xcc, 0xdb, 0xa7, 0x62, 0xe3, 0x8c}; // Replace with actual MAC
+esp_now_peer_info_t peerInfo;
+
+// Task handles
+TaskHandle_t taskWebServerHandle;
+TaskHandle_t taskRobotControlHandle;
+
+// Function to handle movement logic
+void performMovement(const String &action = "")
+{
+  isMoving = true;
+  if (action == "FORWARD" || xboxData.button_a)
+  {
+    quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, WALK, WALK_FORWARD);
+  }
+  else if (action == "BACKWARD" || xboxData.button_b)
+  {
+    quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, WALK, WALK_BACKWARDS);
+  }
+  else if (action == "LEFT" || xboxData.button_x)
+  {
+    quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, ROTATE, ROTATE_LEFT);
+  }
+  else if (action == "RIGHT" || xboxData.button_y)
+  {
+    quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, ROTATE, ROTATE_RIGHT);
+  }
+  else if (action == "BALANCE")
+  {
+    quadruped.balanceBody();
+  }
+  else if(action == "SIT")
+  {
+    quadruped.sittingAction();
+  }
+  else if(action == "STAND")
+  {
+    quadruped.initializeStance();
+  }
+  else if(action=="WAVE")
+  {
+    ;
+  }
+  delay(1000); // Simulate action duration
+  isMoving = false;
+}
+
+void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int len)
+{
+  if (len == sizeof(XboxData))
+  {
+    memcpy(&xboxData, data, sizeof(XboxData));
+    Serial.printf("Received data from %02x:%02x:%02x:%02x:%02x:%02x\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+    if (!isMoving)
+    {
+      String action;
+      if (xboxData.button_a)
+        action = "FORWARD";
+      else if (xboxData.button_b)
+        action = "BACKWARD";
+      else if (xboxData.button_x)
+        action = "LEFT";
+      else if (xboxData.button_y)
+        action = "RIGHT";
+
+      if (action.length() > 0)
+      {
+        xTaskNotify(taskRobotControlHandle, (uint32_t)&action, eSetValueWithOverwrite);
+      }
+    }
+  }
+}
+
+// Web server task for Core 1
+void webServerTask(void *parameter)
+{
+  // Web server routes
+  server.on("/", []()
+            { server.send(200, "text/html", R"rawliteral(
+ <!DOCTYPE html>
+<html>
+<head>
+    <title>Robot Dashboard</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(120deg, #f4f4f9, #e0e7ff);
+            text-align: center;
+        }
+        h1 {
+            margin: 20px 0;
+            color: #333;
+        }
+        #data-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px auto;
+        }
+        .card {
+            width: 150px;
+            height: 100px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: scale(1.05);
+        }
+        .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0078d7;
+        }
+        .controls-container {
+            margin: 30px auto;
+        }
+        .button, .dropdown {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #0078d7;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        .button:hover, .dropdown:hover {
+            background-color: #005bb5;
+            transform: translateY(-2px);
+        }
+        .slider-container {
+            margin: 20px auto;
+        }
+        .slider-label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .animation-container {
+            margin-top: 30px;
+            width: 200px;
+            height: 200px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            position: relative;
+            transform-style: preserve-3d;
+            perspective: 500px;
+            display: inline-block;
+        }
+        .robot-representation {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #0078d7, #005bb5);
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        /* Mobile responsive adjustments */
+        @media (max-width: 600px) {
+            .card {
+                width: 120px;
+                height: 80px;
+            }
+            .controls-container {
+                margin: 15px auto;
+            }
+            .slider-label {
+                font-size: 14px;
+            }
+            .slider-container {
+                width: 100%;
+            }
+            .button, .dropdown {
+                width: 100%;
+                font-size: 16px;
+                padding: 12px 20px;
+            }
+        }
+
+        /* Success popup */
+        #successPopup {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4caf50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-out;
+        }
+
+        #successPopup.show {
+            display: block;
+            opacity: 1;
+        }
+    </style>
+    <script>
+        let pitch = 0, roll = 0;
+        let timeout;
+
+        function fetchData() {
+            fetch('/data/receive')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('roll').textContent = data.roll.toFixed(2);
+                    document.getElementById('pitch').textContent = data.pitch.toFixed(2);
+                    document.getElementById('cputemp').textContent = data.cputemp.toFixed(2);
+                    document.getElementById('bodyTemp').textContent = data.bodyTemp.toFixed(2);
+                    pitch = data.pitch;
+                    roll = data.roll;
+                    updateAnimation();
+                })
+                .catch(console.error);
+        }
+
+        function sendData() {
+            const pitch = document.getElementById('pitch-adjust').value;
+            const roll = document.getElementById('roll-adjust').value;
+            const stepLength = document.getElementById('step-length').value;
+            const stepHeight = document.getElementById('step-height').value;
+            fetch('/data/send?pitch=' + pitch + '&roll=' + roll + '&stepLength=' + stepLength + '&stepHeight=' + stepHeight)
+                .then(response => response.text())
+                .then(() => showSuccessPopup())
+                .catch(console.error);
+        }
+
+        function showSuccessPopup() {
+            const popup = document.getElementById('successPopup');
+            
+            // Show the popup
+            popup.classList.add('show');
+            
+            // After 3 seconds, hide the popup
+            setTimeout(function() {
+                popup.classList.remove('show');
+            }, 3000); // The popup will disappear after 3 seconds
+        }
+
+        function updateAnimation() {
+            const robot = document.querySelector('.robot-representation');
+            // Applying pitch (rotateX) and roll (rotateY) to the robot
+            robot.style.transform = `rotateX(${pitch}deg) rotateY(${roll}deg)`;
+        }
+
+        function sendAction(action) {
+            fetch(`/action?move=${action}`)
+                .then(response => response.text())
+                .then(() => showSuccessPopup())
+                .catch(console.error);
+        }
+
+        function resetAll() {
+            document.getElementById('pitch-adjust').value = 0;
+            document.getElementById('roll-adjust').value = 0;
+            document.getElementById('speed-slider').value = 0.05;
+            document.getElementById('step-length').value = 10;
+            document.getElementById('step-height').value = 5;
+            document.getElementById('pitch-adjust-value').textContent = 0;
+            document.getElementById('roll-adjust-value').textContent = 0;
+            document.getElementById('speed-value').textContent = 0.05;
+            document.getElementById('step-length-value').textContent = 10;
+            document.getElementById('step-height-value').textContent = 5;
+            pitch = 0;
+            roll = 0;
+            updateAnimation();
+            showSuccessPopup();
+        }
+
+        function updateSliderValue(id, value) {
+            document.getElementById(id).textContent = value;
+
+            // Clear previous timeout and delay sending data
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                sendData();
+            }, 500);  // 500ms delay before sending data
+        }
+
+        setInterval(fetchData, 1000);
+    </script>
+</head>
+<body>
+    <h1>Robot Dashboard</h1>
+    <div id="data-container">
+        <div class="card">
+            <div>Roll</div>
+            <div class="value" id="roll">--</div>
+        </div>
+        <div class="card">
+            <div>Pitch</div>
+            <div class="value" id="pitch">--</div>
+        </div>
+        <div class="card">
+            <div>CPU Temp</div>
+            <div class="value" id="cputemp">--</div>
+        </div>
+        <div class="card">
+            <div>Body Temp</div>
+            <div class="value" id="bodyTemp">--</div>
+        </div>
+    </div>
+    <div class="controls-container">
+        <select class="dropdown" id="action-dropdown">
+            <option value="SIT">Sit</option>
+            <option value="STAND">Stand</option>
+            <option value="WAVE">Wave</option>
+        </select>
+        <button class="button" onclick="sendAction(document.getElementById('action-dropdown').value)">Execute Action</button>
+    </div>
+    <div class="controls-container">
+        <button class="button" onclick="sendAction('FORWARD')">Move Forward</button>
+        <button class="button" onclick="sendAction('BACKWARD')">Move Backward</button>
+        <button class="button" onclick="sendAction('LEFT')">Turn Left</button>
+        <button class="button" onclick="sendAction('RIGHT')">Turn Right</button>
+    </div>
+    <div class="controls-container">
+        <button class="button" onclick="sendAction('BALANCE')">Balance</button>
+        <button class="button" onclick="resetAll()">Reset All</button>
+    </div>
+    <div class="controls-container">
+        <label class="slider-label">Pitch Adjust:</label>
+        <input id="pitch-adjust" type="range" min="-30" max="30" value="0" oninput="updateSliderValue('pitch-adjust-value', this.value)" />
+        <span id="pitch-adjust-value">0</span>
+    </div>
+    <div class="controls-container">
+        <label class="slider-label">Roll Adjust:</label>
+        <input id="roll-adjust" type="range" min="-30" max="30" value="0" oninput="updateSliderValue('roll-adjust-value', this.value)" />
+        <span id="roll-adjust-value">0</span>
+    </div>
+    <div class="controls-container">
+        <label class="slider-label">Speed:</label>
+        <input id="speed-slider" type="range" min="0.01" max="0.5" step="0.01" value="0.05" oninput="updateSliderValue('speed-value', this.value)" />
+        <span id="speed-value">0.05</span>
+    </div>
+    <div class="controls-container">
+        <label class="slider-label">Step Length:</label>
+        <input id="step-length" type="range" min="5" max="20" value="10" oninput="updateSliderValue('step-length-value', this.value)" />
+        <span id="step-length-value">10</span>
+    </div>
+    <div class="controls-container">
+        <label class="slider-label">Step Height:</label>
+        <input id="step-height" type="range" min="1" max="10" value="5" oninput="updateSliderValue('step-height-value', this.value)" />
+        <span id="step-height-value">5</span>
+    </div>
+    <div class="animation-container">
+        <div class="robot-representation"></div>
+    </div>
+
+    <!-- Success Popup -->
+    <div id="successPopup">Values Set Successfully!</div>
+</body>
+</html>
+
+)rawliteral"); });
+
+  server.on("/data/receive", []()
+            {
+        String json = "{\"roll\":" + String(quadruped.getRoll()) + ",\"pitch\":" + String(quadruped.getPitch()) +",\"cputemp\":" +String(temperatureRead())+ ",\"bodyTemp\":"+String(quadruped.getTemp())+"}";
+        server.send(200, "application/json", json); });
+  server.on("/data/send", []()
+            {
+        if (server.hasArg("pitch") && server.hasArg("roll") && server.hasArg("stepLength") && server.hasArg("stepHeight"))
+        {
+            float pitch = server.arg("pitch").toFloat();
+            float roll = server.arg("roll").toFloat();
+            stepLength = server.arg("stepLength").toFloat();
+            stepHeight = server.arg("stepHeight").toFloat();
+            quadruped.SetPidTargets(pitch,roll);
+            Serial.println("PID targets set and are: "+String(pitch)+" "+String(roll));
+            // server.send(200, "text/plain", "Data received.");
+        }
+        else
+        {
+            server.send(400, "text/plain", "Bad Request");
+        } });
+  server.on("/action", []()
+            {
+        if (server.hasArg("move")) {
+            String move = server.arg("move");
+            if (!isMoving) {
+                
+                xTaskNotify(taskRobotControlHandle, (uint32_t)&move, eSetValueWithOverwrite);
+                server.send(200, "text/plain", "Action " + move + " performed.");
+            } else {
+                server.send(200, "text/plain", "Robot is already moving.");
+            }
+        } else {
+            server.send(400, "text/plain", "Bad Request");
+        } });
+
+  server.begin();
+
+  // Handle client requests
+  while (true)
+  {
+    server.handleClient();
+    delay(10); // Yield to other tasks
+  }
+}
+
+// Robot control task for Core 0
+void robotControlTask(void *parameter)
+{
+  uint32_t notificationValue;
+  while (true)
+  {
+    xTaskNotifyWait(0, ULONG_MAX, &notificationValue, portMAX_DELAY);
+    String *action = (String *)notificationValue;
+    if (action != nullptr)
+    {
+      performMovement(*action);
+    }
+  }
+}
+
 void setup()
 {
-  // quadruped.setBodyPosition(0, 0, -40);
   Serial.begin(115200);
-  Wire.begin();
-  Wire.setClock(400000);
-  while(!Serial);
-  // quadruped.initializeStance();
-  // delay(2000);
-  quadruped.InitializeRobotControllers();
-  delay(1000);
-}
+  while (!Serial)
+    ;
 
+  // Initialize Wi-Fi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin("108B", "108BCameraSmecherii$"); // Replace with your Wi-Fi credentials
+
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.println("Connecting to Wi-Fi...");
+  }
+  Serial.println("Connected to Wi-Fi: " + WiFi.localIP().toString());
+
+  // Initialize ESP-NOW
+  if (esp_now_init() != ESP_OK)
+  {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+  esp_now_register_recv_cb(OnDataReceived);
+
+  memcpy(peerInfo.peer_addr, peerAddress, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+  if (esp_now_add_peer(&peerInfo) != ESP_OK)
+  {
+    Serial.println("Failed to add peer");
+    return;
+  }
+  // Initialize robot
+  quadruped.InitializeRobotControllers();
+
+  // Create tasks for each core
+  xTaskCreatePinnedToCore(webServerTask, "WebServerTask", 4096, NULL, 1, &taskWebServerHandle, 1);
+  xTaskCreatePinnedToCore(robotControlTask, "RobotControlTask", 4096, NULL, 1, &taskRobotControlHandle, 0);
+}
 void loop()
 {
-
-  // if (Serial.available())
-  // {
-  //   String data = Serial.readStringUntil('\n');
-  //   float x = data.substring(0, data.indexOf(',')).toFloat();
-  //   float y = data.substring(data.indexOf(',') + 1, data.lastIndexOf(',')).toFloat();
-  //   float z = data.substring(data.lastIndexOf(',') + 1).toFloat();
-  //   Serial.println("X: " + String(x) + " Y: " + String(y) + " Z: " + String(z));
-  // }
-  // if (Serial.available()) // if reads 'w' then walk, 'r' rotate
-  // {
-    char command = Serial.read();
-    if (command == 'w')
-    {
-      quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, WALK, WALK_FORWARD);
-    }
-    else if (command == 's')
-    {
-      quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, WALK, WALK_BACKWARDS);
-    }
-    else if (command == 'a')
-    {
-      quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, ROTATE, ROTATE_LEFT);
-    }
-    else if (command == 'd')
-    {
-      quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, ROTATE, ROTATE_RIGHT);
-    }
-    else if (command == 'q')
-    {
-      // quadruped.walkQuadruped(stepLength, stepHeight, stepDuration, WALK, 0);
-      quadruped.initializeStance();
-    }
-    quadruped.balanceBody();
-    delay(100);
-    //TODO add balance function inside the walk function
-  
-  // quadruped.walkCrawl(stepLength, stepHeight, stepDuration);
-  // quadruped.walkQuadruped(stepLength, stepHeight, stepDuration);
-  // SpiderLeg spiderleg("1", 43, 60, 104);
-  // // // std::cout<<"extend legs"<<std::endl;
-  // auto angles = spiderleg.inverseKinematics({16, 22, LEG_SITTING_Z-30});
-  // quadruped.setLegServoAngles(0, angles);
-  // quadruped.setLegServoAngles(1, angles);
-  // quadruped.setLegServoAngles(2, angles);
-  // quadruped.setLegServoAngles(3, angles);
-  // delay(1000);
-
-  // std::cout<<"sit legs"<<std::endl;
-  //  angles = spiderleg.inverseKinematics({(L1_TO_R1 / 2) -20, (L1_TO_L3 / 2) -20, LEG_SITTING_Z});
-  // setServoAngles(0, angles);
-  // setServoAngles(1, angles);
-  // setServoAngles(2, angles);
-  // setServoAngles(3, angles);
-  // delay(1000);
-  // std::cout<<"pull in legs"<<std::endl;
-  // angles = spiderleg.inverseKinematics({(L1_TO_R1 / 2) +20, (L1_TO_L3 / 2) +20, LEG_SITTING_Z});
-  // setServoAngles(0, angles);
-  // setServoAngles(1, angles);
-  // setServoAngles(2, angles);
-  // setServoAngles(3, angles);
-
-  // delay(1000);
+  // Main loop can be used for debugging or other non-blocking tasks
 }
-
-
-
-void adjustPosture()
-{
-  // Adjust the posture of the robot to ensure stability
-  // This function can be used to correct the robot's posture
-  // after a step or during a gait cycle.
-  //get current pitch and roll
-  // float pitch = mpu6500.getPitch();
-  // float roll = mpu6500.getRoll();
-  // Serial.print("Pitch   = ");
-  // Serial.print(pitch);
-  // Serial.print("  |  Roll    = ");
-  // Serial.println(roll);
-  // Serial.println();
-
-  //get current position using forward kinematics
-  //then adjust the position to correct the posture
-  //shift the body to the opposite direction of the tilt
-  //if pitch is positive, the robot is tilted forward
-  //if pitch is negative, the robot is tilted backward
-  //if roll is positive, the robot is tilted to the right
-  //if roll is negative, the robot is tilted to the left
-  //adjust the body position to correct the tilt
-  //if pitch is positive, move the body backward
-  //if pitch is negative, move the body forward
-  //if roll is positive, move the body to the left
-  //if roll is negative, move the body to the right
-  //#TODO convert delay to milis
-  
-  
-  // delay(1000);
-}
-

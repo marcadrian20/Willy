@@ -235,6 +235,33 @@ void Hexapod::InitializeRobotControllers()
     mpu6500.init();
 }
 
+void Hexapod::sittingAction()
+{
+    // Define neutral positions for each leg
+    std::vector<std::vector<double>> neutralPositions = {
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, -60}, // Front Left (L1)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, -60}, // Front Right (R1)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, -60}, // Rear Left (L3)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, -60}, // Rear Right (R3)
+        {-L1_TO_R1 / 2, 0, LEG_SITTING_Z},                // Middle Left (L2)
+        {L1_TO_R1 / 2, 0, LEG_SITTING_Z}                  // Middle Right (R2)
+    };
+
+    // Apply IK to move each leg to its neutral position
+    for (size_t i = 0; i < legs.size(); ++i)
+    {
+        auto angles = legs[i].inverseKinematics(neutralPositions[i]);
+        setLegServoAngles(i, angles); // Send angles to the servos
+    }
+    // delay(1000);
+    // setBodyPosition(0, 0, 0);
+    // delay(1000);
+    // setBodyPosition(0, 0, 5);
+    // delay(1000);
+    // setBodyPosition(0, 0, 0);
+    // delay(1000);
+}
+
 void Hexapod::walkQuadruped(double stepLength, double stepHeight, double stepDuration, int motionType, int direction)
 {
     int group1[] = {0, 3}; //{0, 5}; // Front Left (Leg 1) and Back Right (Leg 6)

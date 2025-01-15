@@ -50,6 +50,11 @@ float MPU6500Interface::getRoll()
     return mpu6500.getRoll();
 }
 
+float MPU6500Interface::getTemp()
+{
+    return mpu6500.getTemperature();
+}
+
 float PIDController::calculate(float input)
 {
     unsigned long currentTime = millis();
@@ -60,7 +65,7 @@ float PIDController::calculate(float input)
     }
     lastTime = currentTime;
     float error = setpoint - input;
-    if (fabs(error) < 1.0)
+    if (fabs(error) < 0.25)
         return 0.0;
     integral += error * deltaTime;
     float derivative = deltaTime > 0 ? (error - previousError) / deltaTime : 0;
@@ -79,3 +84,4 @@ void PIDController::setTarget(float target)
 {
     setpoint = target;
 }
+
