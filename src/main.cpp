@@ -20,7 +20,7 @@ struct XboxData
   bool button_x;
 };
 
-XboxData xboxData;
+XboxData xboxData = {false};
 volatile bool isMoving = false;
 
 // Web server setup
@@ -34,23 +34,40 @@ esp_now_peer_info_t peerInfo;
 TaskHandle_t taskWebServerHandle;
 TaskHandle_t taskRobotControlHandle;
 
+TaskHandle_t taskBalanceHandle;
+
+void balanceTask(void *parameter)
+{
+  while (true)
+  {
+    if (!isMoving)
+    {
+      quadruped.balanceBody(); // Run the Balance function
+    }
+    vTaskDelay(100 / portTICK_PERIOD_MS); // Delay for 100ms
+  }
+}
+
 // Function to handle movement logic
 void performMovement(const String &action = "")
 {
   isMoving = true;
-  if (action == "FORWARD" || xboxData.button_a)
+  // Serial.println("Performing movement..." + action);
+  // send is moving to the other esp as handshake
+  esp_now_send(peerAddress, (uint8_t *)&isMoving, sizeof(isMoving));
+  if (action == "FORWARD")
   {
     quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, WALK, WALK_FORWARD);
   }
-  else if (action == "BACKWARD" || xboxData.button_b)
+  else if (action == "BACKWARD")
   {
     quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, WALK, WALK_BACKWARDS);
   }
-  else if (action == "LEFT" || xboxData.button_x)
+  else if (action == "LEFT")
   {
     quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, ROTATE, ROTATE_LEFT);
   }
-  else if (action == "RIGHT" || xboxData.button_y)
+  else if (action == "RIGHT")
   {
     quadruped.walkWaveGait(stepLength, stepHeight, stepDuration, ROTATE, ROTATE_RIGHT);
   }
@@ -58,20 +75,21 @@ void performMovement(const String &action = "")
   {
     quadruped.balanceBody();
   }
-  else if(action == "SIT")
+  else if (action == "SIT")
   {
     quadruped.sittingAction();
   }
-  else if(action == "STAND")
+  else if (action == "STAND")
   {
     quadruped.initializeStance();
   }
-  else if(action=="WAVE")
+  else if (action == "WAVE")
   {
-    ;
+    quadruped.waveAction();
   }
-  delay(1000); // Simulate action duration
+  // delay(200); // Simulate action duration
   isMoving = false;
+  esp_now_send(peerAddress, (uint8_t *)&isMoving, sizeof(isMoving));
 }
 
 void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int len)
@@ -80,9 +98,11 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int len)
   {
     memcpy(&xboxData, data, sizeof(XboxData));
     Serial.printf("Received data from %02x:%02x:%02x:%02x:%02x:%02x\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    if (!isMoving)
+    bool moving;
+    moving = isMoving;
+    if (!moving)
     {
-      String action;
+      static String action;
       if (xboxData.button_a)
         action = "FORWARD";
       else if (xboxData.button_b)
@@ -91,7 +111,7 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int len)
         action = "LEFT";
       else if (xboxData.button_y)
         action = "RIGHT";
-
+      Serial.println(action);
       if (action.length() > 0)
       {
         xTaskNotify(taskRobotControlHandle, (uint32_t)&action, eSetValueWithOverwrite);
@@ -263,7 +283,9 @@ void webServerTask(void *parameter)
             const roll = document.getElementById('roll-adjust').value;
             const stepLength = document.getElementById('step-length').value;
             const stepHeight = document.getElementById('step-height').value;
-            fetch('/data/send?pitch=' + pitch + '&roll=' + roll + '&stepLength=' + stepLength + '&stepHeight=' + stepHeight)
+            const speed = document.getElementById('speed-slider').value;
+            const height = document.getElementById('height-slider').value;
+            fetch('/data/send?pitch=' + pitch + '&roll=' + roll + '&stepLength=' + stepLength + '&stepHeight=' + stepHeight+ '&height=' + height+ '&speed=' + speed)
                 .then(response => response.text())
                 .then(() => showSuccessPopup())
                 .catch(console.error);
@@ -298,16 +320,19 @@ void webServerTask(void *parameter)
             document.getElementById('pitch-adjust').value = 0;
             document.getElementById('roll-adjust').value = 0;
             document.getElementById('speed-slider').value = 0.05;
-            document.getElementById('step-length').value = 10;
-            document.getElementById('step-height').value = 5;
+            document.getElementById('step-length').value = 50;
+            document.getElementById('step-height').value = 20;
             document.getElementById('pitch-adjust-value').textContent = 0;
             document.getElementById('roll-adjust-value').textContent = 0;
             document.getElementById('speed-value').textContent = 0.05;
-            document.getElementById('step-length-value').textContent = 10;
-            document.getElementById('step-height-value').textContent = 5;
+            document.getElementById('height-value').textContent = -35;
+            document.getElementById('step-length-value').textContent = 50;
+            document.getElementById('step-height-value').textContent = 20;
+            document.getElementById('base-height').value = -35;
             pitch = 0;
             roll = 0;
             updateAnimation();
+            sendData();
             showSuccessPopup();
         }
 
@@ -378,14 +403,19 @@ void webServerTask(void *parameter)
         <span id="speed-value">0.05</span>
     </div>
     <div class="controls-container">
+      <label class="slider-label">Height:</label>
+      <input id="height-slider" type="range" min="-40" max="0" value="-30" oninput="updateSliderValue('height-value', this.value)" />
+      <span id="height-value">-30</span>
+    </div>
+    <div class="controls-container">
         <label class="slider-label">Step Length:</label>
-        <input id="step-length" type="range" min="5" max="20" value="10" oninput="updateSliderValue('step-length-value', this.value)" />
-        <span id="step-length-value">10</span>
+        <input id="step-length" type="range" min="5" max="70" value="50" oninput="updateSliderValue('step-length-value', this.value)" />
+        <span id="step-length-value">50</span>
     </div>
     <div class="controls-container">
         <label class="slider-label">Step Height:</label>
-        <input id="step-height" type="range" min="1" max="10" value="5" oninput="updateSliderValue('step-height-value', this.value)" />
-        <span id="step-height-value">5</span>
+        <input id="step-height" type="range" min="0" max="30" value="20" oninput="updateSliderValue('step-height-value', this.value)" />
+        <span id="step-height-value">20</span>
     </div>
     <div class="animation-container">
         <div class="robot-representation"></div>
@@ -404,16 +434,25 @@ void webServerTask(void *parameter)
         server.send(200, "application/json", json); });
   server.on("/data/send", []()
             {
-        if (server.hasArg("pitch") && server.hasArg("roll") && server.hasArg("stepLength") && server.hasArg("stepHeight"))
+        if (server.hasArg("pitch") && server.hasArg("roll") && server.hasArg("stepLength") && server.hasArg("stepHeight")&&server.hasArg("height"))
         {
             float pitch = server.arg("pitch").toFloat();
             float roll = server.arg("roll").toFloat();
             stepLength = server.arg("stepLength").toFloat();
             stepHeight = server.arg("stepHeight").toFloat();
+            stepDuration = server.arg("stepDuration").toFloat();
+            double speed = server.arg("speed").toFloat();
+            quadruped.setTimescale(speed);
+            quadruped.setHeight(server.arg("height").toFloat());
             quadruped.SetPidTargets(pitch,roll);
             Serial.println("PID targets set and are: "+String(pitch)+" "+String(roll));
             // server.send(200, "text/plain", "Data received.");
-        }
+          Serial.println("height set to: "+String(server.arg("height").toFloat()));
+          Serial.println("speed set to: "+String(speed));
+          Serial.println("stepLength set to: "+String(stepLength));
+          Serial.println("stepHeight set to: "+String(stepHeight));
+        
+        } 
         else
         {
             server.send(400, "text/plain", "Bad Request");
@@ -461,12 +500,18 @@ void robotControlTask(void *parameter)
 void setup()
 {
   Serial.begin(115200);
+  Wire.begin();
+  Wire.setClock(400000);
   while (!Serial)
     ;
 
   // Initialize Wi-Fi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin("108B", "108BCameraSmecherii$"); // Replace with your Wi-Fi credentials
+  WiFi.mode(WIFI_AP_STA);
+  // WiFi.begin("108B", "108BCameraSmecherii$"); // Replace with your Wi-Fi credentials
+  Serial.println("Setting up AP...");
+  WiFi.softAP("internalNET", "jamal1234"); // Start the AP with SSID and password
+  Serial.println("AP Started.");
+  WiFi.begin("SpiderBot", "12345678");
 
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -475,6 +520,8 @@ void setup()
   }
   Serial.println("Connected to Wi-Fi: " + WiFi.localIP().toString());
 
+  Serial.print("AP IP address: ");
+  Serial.println(WiFi.softAPIP().toString());
   // Initialize ESP-NOW
   if (esp_now_init() != ESP_OK)
   {
@@ -482,9 +529,19 @@ void setup()
     return;
   }
   esp_now_register_recv_cb(OnDataReceived);
-
+  esp_now_register_send_cb([](const uint8_t *mac, esp_now_send_status_t status)
+                           {
+    if (status == ESP_OK)
+    {
+      Serial.println("Data sent successfully");
+    }
+    else
+    {
+      Serial.println("Error sending data");
+    } });
   memcpy(peerInfo.peer_addr, peerAddress, 6);
   peerInfo.channel = 0;
+
   peerInfo.encrypt = false;
   if (esp_now_add_peer(&peerInfo) != ESP_OK)
   {
@@ -495,8 +552,9 @@ void setup()
   quadruped.InitializeRobotControllers();
 
   // Create tasks for each core
-  xTaskCreatePinnedToCore(webServerTask, "WebServerTask", 4096, NULL, 1, &taskWebServerHandle, 1);
-  xTaskCreatePinnedToCore(robotControlTask, "RobotControlTask", 4096, NULL, 1, &taskRobotControlHandle, 0);
+  xTaskCreatePinnedToCore(webServerTask, "WebServerTask", 4096, NULL, 1, &taskWebServerHandle, 0);
+  xTaskCreatePinnedToCore(robotControlTask, "RobotControlTask", 4096, NULL, 1, &taskRobotControlHandle, 1);
+  xTaskCreatePinnedToCore(balanceTask, "BalanceTask", 4096, NULL, 1, &taskBalanceHandle, 1);
 }
 void loop()
 {

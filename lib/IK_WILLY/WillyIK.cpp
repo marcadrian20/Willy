@@ -4,7 +4,7 @@ std::vector<double> Hexapod::calculateTrajectory(int legIndex, double phase, dou
 { // Neutral positions for the leg
     double defaultX = L1_TO_R1 / 2;
     double defaultY = L1_TO_L3 / 2;
-    double defaultZ = LEG_SITTING_Z + 10;
+    double defaultZ = baseHeight;
     // Direction 0 is forward, 1 is backward, 2 is left, 3 is right
     //  X is Horizontal motion (forward/backward)
     //  Y is Lateral motion (side to side)
@@ -55,7 +55,7 @@ void Hexapod::setLegServoAngles(int legIndex, const std::vector<double> &angles)
     // Map joint angles to servo pulses
     if (legIndex == 4 || legIndex == 5)
         return;
-    std::cout << angles[0] << " " << angles[1] << " " << angles[2] << std::endl;
+    // std::cout << angles[0] << " " << angles[1] << " " << angles[2] << std::endl;
     auto coxaAng = max(0.0, min(angles[0] + 8, 180.0));
     auto femurAng = max(0.0, min(angles[1] - 35, 180.0));
     auto tibiaAng = max(0.0, min(angles[2] - 83, 180.0));
@@ -68,7 +68,7 @@ void Hexapod::setLegServoAngles(int legIndex, const std::vector<double> &angles)
     servoController.setAngle(legIndex * 3 + 0, coxaAng);
     servoController.setAngle(legIndex * 3 + 1, femurAng);
     servoController.setAngle(legIndex * 3 + 2, tibiaAng);
-    std::cout << "^^^^^^^^^^^^^^^^" << std::endl;
+    // std::cout << "^^^^^^^^^^^^^^^^" << std::endl;
     // Set servos for the given leg
     //   // Set servos for the given leg
     //   pwm.setPWM(legIndex * 3 + 1, 0, femur); // Femur servo
@@ -183,7 +183,8 @@ void Hexapod::walkWaveGait(double stepLength, double stepHeight, double stepDura
     double legPhases[4] = {0.0, 0.25, 0.5, 0.75};
     static int balanceCounter = 0;
     // Single gait cycle
-    for (double t = 0; t <= 1.0; t += 0.1)
+    // double _timescale= timescale;
+    for (double t = 0; t <= 1.0; t += timescale)
     {
         // Move all legs according to their phases
         for (int i = 0; i < 4; i++)
@@ -213,10 +214,10 @@ void Hexapod::initializeStance()
 {
     // Define neutral positions for each leg
     std::vector<std::vector<double>> neutralPositions = {
-        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z + 10}, // Front Left (L1)
-        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z + 10}, // Front Right (R1)
-        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z + 10}, // Rear Left (L3)
-        {L1_TO_R1 / 2, L1_TO_L3 / 2, LEG_SITTING_Z + 10}, // Rear Right (R3)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, baseHeight}, // Front Left (L1)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, baseHeight}, // Front Right (R1)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, baseHeight}, // Rear Left (L3)
+        {L1_TO_R1 / 2, L1_TO_L3 / 2, baseHeight}, // Rear Right (R3)
         {-L1_TO_R1 / 2, 0, LEG_SITTING_Z},                // Middle Left (L2)
         {L1_TO_R1 / 2, 0, LEG_SITTING_Z}                  // Middle Right (R2)
     };
@@ -225,6 +226,7 @@ void Hexapod::initializeStance()
     for (size_t i = 0; i < legs.size(); ++i)
     {
         auto angles = legs[i].inverseKinematics(neutralPositions[i]);
+        currentLegTargets[i] = neutralPositions[i];
         setLegServoAngles(i, angles); // Send angles to the servos
     }
 }
@@ -243,14 +245,15 @@ void Hexapod::sittingAction()
         {L1_TO_R1 / 2, L1_TO_L3 / 2, -60}, // Front Right (R1)
         {L1_TO_R1 / 2, L1_TO_L3 / 2, -60}, // Rear Left (L3)
         {L1_TO_R1 / 2, L1_TO_L3 / 2, -60}, // Rear Right (R3)
-        {-L1_TO_R1 / 2, 0, LEG_SITTING_Z},                // Middle Left (L2)
-        {L1_TO_R1 / 2, 0, LEG_SITTING_Z}                  // Middle Right (R2)
+        {-L1_TO_R1 / 2, 0, LEG_SITTING_Z}, // Middle Left (L2)
+        {L1_TO_R1 / 2, 0, LEG_SITTING_Z}   // Middle Right (R2)
     };
 
     // Apply IK to move each leg to its neutral position
     for (size_t i = 0; i < legs.size(); ++i)
     {
         auto angles = legs[i].inverseKinematics(neutralPositions[i]);
+        currentLegTargets[i] = neutralPositions[i];
         setLegServoAngles(i, angles); // Send angles to the servos
     }
     // delay(1000);
@@ -380,9 +383,32 @@ void Hexapod::balanceBody()
 {
     float currentPitch = mpu6500.getPitch();
     float currentRoll = mpu6500.getRoll();
-    std::cout << "Current pitch: " << currentPitch << std::endl;
-    std::cout << "Current roll: " << currentRoll << std::endl;
-    std::cout << "Balancing body..." << std::endl;
+    // std::cout << "Current pitch: " << currentPitch << std::endl;
+    // std::cout << "Current roll: " << currentRoll << std::endl;
+    // std::cout << "Balancing body..." << std::endl;
     // std::cout<<"before modify:"<<currentLegTargets[i][2]<<std::endl;
     balanceController.balance(currentPitch, currentRoll);
+}
+
+void Hexapod::waveAction()
+{
+    // I can use the current targets of the legs. For waving i wave using only foot nr 2 (index 1).
+    // I set it to {x,y,z}={63,83.5,-100} and then wave it to {63,83.5,-60} and back to {63,83.5,-100}
+    // and then place it back down to the original target
+    std::vector<double> currentTarget = currentLegTargets[1];
+    std::vector<double> target = {63, 83.5, -70};
+    double z;
+    // double x;
+    for (int i = 0; i < 4; i++)
+        for (double t = 0; t <= 1.01; t += 0.1)
+        {
+            z = -80 + 20 * sin(2 * M_PI * t);
+            // target[0] += 10 * sin(2 * M_PI * t);
+            // target[1]+= 10 * sin(2 * M_PI * t);
+            target[2] = z;
+            auto angles = legs[1].inverseKinematics(target);
+            setLegServoAngles(1, angles);
+            delay(50);
+        }
+    setLegServoAngles(1, legs[1].inverseKinematics(currentTarget));
 }

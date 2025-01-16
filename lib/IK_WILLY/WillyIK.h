@@ -60,12 +60,14 @@ public:
 class Hexapod
 {
 private:
+    double timescale=0.05;
     std::vector<SpiderLeg> legs;
     double bodyX, bodyY, bodyZ; // Body's current position
     double orientation;         // Body's orientation in degrees
     ServoController servoController=ServoController(PCA9685_ADDRESS);
     MPU6500Interface mpu6500=MPU6500Interface(MPU6500_ADDRESS);
     BalanceController balanceController=BalanceController(*this);
+    double baseHeight = LEG_SITTING_Z + 10;
     
 public:
     // Constructor to initialize legs and body position
@@ -77,7 +79,7 @@ public:
         {
             legs.emplace_back("Leg" + std::to_string(i + 1), coxa, femur, tibia);
         }
-         currentLegTargets.resize(6, {L1_TO_R1/2, L1_TO_L3/2, LEG_SITTING_Z+10});
+         currentLegTargets.resize(6, {L1_TO_R1/2, L1_TO_L3/2, baseHeight});
     }
     // Get references to all legs
     std::vector<SpiderLeg> &getLegs()
@@ -90,6 +92,11 @@ public:
     // Perform a walking gait
     void InitializeRobotControllers();
     // Print the positions of all legs
+    void setHeight(double NewHeight)
+    {
+        baseHeight = NewHeight;
+        initializeStance();
+    }
     void printLegPositions()
     {
         for (int i = 0; i < legs.size(); i++)
@@ -97,6 +104,10 @@ public:
             std::cout << "Leg " << i + 1 << ":" << std::endl;
             legs[i].printJointPositions();
         }
+    }
+    void setTimescale(float speed)
+    {
+        timescale = speed;
     }
     float getRoll()
     {
@@ -123,4 +134,5 @@ public:
     void walkCrawl(double stepLength, double stepHeight, double stepDuration, int motionType, int direction);
     void walkWaveGait(double stepLength, double stepHeight, double stepDuration, int motionType, int direction);
     void sittingAction();
+    void waveAction();
 };

@@ -2,8 +2,8 @@
 #include "WillyIK.h"
 
 BalanceController::BalanceController(Hexapod &hexapod)
-    : pitchPID(1.5, 0.0, 0.0, 0.0),
-      rollPID(1.5, 0.00, 0.0, 0.0),
+    : pitchPID(1.3, 0.0, 0.0, 0.0),
+      rollPID(1.3, 0.00, 0.0, 0.0),
       robot(hexapod)
 {
 }

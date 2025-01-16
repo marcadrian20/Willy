@@ -2,6 +2,7 @@
 
 void ServoController::init()
 {
+    
     pwm.begin();
     pwm.setOscillatorFrequency(27000000);
     pwm.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
@@ -65,7 +66,7 @@ float PIDController::calculate(float input)
     }
     lastTime = currentTime;
     float error = setpoint - input;
-    if (fabs(error) < 0.25)
+    if (fabs(error) < 0.50)
         return 0.0;
     integral += error * deltaTime;
     float derivative = deltaTime > 0 ? (error - previousError) / deltaTime : 0;
