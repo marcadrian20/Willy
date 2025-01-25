@@ -15,7 +15,7 @@ WILLY is a six-legged (hexapod) robot powered by an ESP32 microcontroller. Desig
   - **Web Dashboard:**
     - An intuitive interface to control WILLY remotely.
     - View and adjust movement parameters in real-time.
-    - ![dashboard](https://github.com/user-attachments/assets/e280cccf-7d80-4438-9524-db62e25a32c1)
+    ![dashboard](https://github.com/user-attachments/assets/e280cccf-7d80-4438-9524-db62e25a32c1)
       
   - **Xbox Controller:**
     - Sends movement data to the first ESP32 via serial.
@@ -42,7 +42,6 @@ WILLY is a six-legged (hexapod) robot powered by an ESP32 microcontroller. Desig
 ## Requirements
 
 ### Hardware
--
 - 2x ESP32 microcontrollers(one is optional)
 - 18x Servo motors (180-degree rotation, I have tested with cheap MG996R servos, any 180/270 servo should work)
 - MPU6500 for telemetry and body temperature reading
